@@ -27,7 +27,7 @@ export default class MyNewApp extends Component {
     this.cbFromNative = this.cbFromNative.bind(this);
     this.sendBtnClick = this.sendBtnClick.bind(this);
     this.resendBtnClick = this.resendBtnClick.bind(this);
-    this.callBtnClick = this.callBtnClick.bind(this);
+    this.signoutBtnclick = this.signoutBtnclick.bind(this);
     this.verifyOtpBtnClick = this.verifyOtpBtnClick.bind(this);
     this.state = {
       "phoneNo": "",
@@ -58,15 +58,36 @@ export default class MyNewApp extends Component {
   }
   resendBtnClick() {
     let { phoneNo } = this.state;
+    FirebasePhoneAuthModule.resendVerificationCode(phoneNo).then(verificationId => {
+      console.log('[PHONE_AUTH] Verification code REsent.', verificationId)
+      this.setState({ isSending: false, verificationId })
+    }).catch(error => {
+      console.log('[PHONE_AUTH] Verification code REfailed.')
+      console.error(error)
+      this.setState({ isSending: false })
+      this.showError(
+        `Could not REsend confirmation code. Please try again.\n\nError: ${error}`,
+        true
+      )
+    })
     alert("Resend button clicked: " + phoneNo);
   }
-  callBtnClick() {
+  signoutBtnclick() {
     let { phoneNo } = this.state;
-    alert("Call button clicked: " + phoneNo);
+    FirebasePhoneAuthModule.signOut().then(userNumber => {
+      console.log('[PHONE_AUTH] ', userNumber ,' SignOut Successfully.!')
+    }).catch(error => {
+      console.log('[PHONE_AUTH] ERROR in SignOut.')
+      console.error(error)
+    })
   }
   verifyOtpBtnClick() {
     let { otp } = this.state;
-    alert("Verify OTP button clicked:  " + otp);
+    FirebasePhoneAuthModule.verifyPhoneNumberWithCode(otp).then(user => {
+      console.log('[PHONE_AUTH] SignIn successfully...! >> ', user);
+    }).catch(error => {
+      console.log('[PHONE_AUTH] Error in SignIn >> ', error)
+    })
   }
   cbFromNative(message) {
     console.log("Message >> ", message);
@@ -135,8 +156,8 @@ export default class MyNewApp extends Component {
           </View>
           <View style={styles.buttons}>
             <Button
-              onPress={this.callBtnClick}
-              title="Call"
+              onPress={this.signoutBtnclick}
+              title="SignOut"
               color="#841584"
               accessibilityLabel="Call code"
               style={styles.buttons}
