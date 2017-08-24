@@ -114,7 +114,35 @@ public class FirebasePhoneAuthModuleModule extends ReactContextBaseJavaModule {
             @Override
             public void onVerificationCompleted(PhoneAuthCredential credential) {
                 Log.i(TAG, "onVerificationCompleted");
-                Log.i(TAG, "Credential >> " + credential.getSmsCode() + " >> " + credential.getProvider());
+                firebaseAuth.signInWithCredential(credential)
+                        .addOnCompleteListener(new OnCompleteListener<AuthResult>() {
+                            @Override
+                            public void onComplete(@NonNull Task<AuthResult> task) {
+                                if (task.isSuccessful()) {
+                                    Log.i(TAG, "signInWithCredential:success");
+                                    FirebaseUser user = task.getResult().getUser();
+                                    Log.i(TAG, "Phone Number >> "+ user.getPhoneNumber());
+                                    Log.i(TAG, "UID >> "+ user.getUid());
+                                    Log.i(TAG, "ProviderId >> "+ user.getProviderId());
+                                    JSONObject object = new JSONObject();
+                                    try {
+                                        object.put("phoneNumber", user.getPhoneNumber());
+                                        object.put("providerId", user.getProviderId());
+                                        object.put("uid", user.getUid());
+                                        promise.resolve(object.toString());
+                                    } catch (JSONException e) {
+                                        e.printStackTrace();
+                                    }
+                                } else {
+                                    Log.w(TAG, "signInWithCredential:failure", task.getException());
+                                    if (task.getException() instanceof FirebaseAuthInvalidCredentialsException) {
+                                        Log.w(TAG, "Invalid code.");
+                                        promise.resolve("Invalid code.");
+                                    }
+                                    promise.reject("signInWithCredential:failure \n", task.getException());
+                                }
+                            }
+                        });
                 sendEvent(ON_VERIFICATION_COMPLETED, credential.getSmsCode());
             }
 
