@@ -3,7 +3,6 @@
 package com.mynewapp.firebasephoneauthmodule;
 
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
 import android.util.Log;
 
 import com.facebook.react.bridge.Callback;
@@ -11,11 +10,9 @@ import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
-import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
-import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseException;
 import com.google.firebase.FirebaseTooManyRequestsException;
 import com.google.firebase.auth.AuthResult;
@@ -33,7 +30,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public class FirebasePhoneAuthModuleModule extends ReactContextBaseJavaModule {
-    private static final String TAG = "JBFirebase";
+    private static final String TAG = "JBFirebasePhoneAuth";
 
     public static final String REACT_CLASS = "FirebasePhoneAuthModule";
     private static ReactApplicationContext reactContext = null;
@@ -52,19 +49,13 @@ public class FirebasePhoneAuthModuleModule extends ReactContextBaseJavaModule {
 
     @Override
     public String getName() {
-        // Tell React the name of the module
-        // https://facebook.github.io/react-native/docs/native-modules-android.html#the-toast-module
         return REACT_CLASS;
     }
 
     @Override
     public Map<String, Object> getConstants() {
-        // Export any constants to be used in your native module
-        // https://facebook.github.io/react-native/docs/native-modules-android.html#the-toast-module
         final Map<String, Object> constants = new HashMap<>();
         constants.put("ON_VERIFICATION_COMPLETED", ON_VERIFICATION_COMPLETED);
-//        constants.put("ON_VERIFICATION_FAILED", ON_VERIFICATION_FAILED);
-//        constants.put("ON_CODE_SENT", ON_CODE_SENT);
         constants.put("ON_CODE_AUTO_RETRIEVAL_TIMEOUT", ON_CODE_AUTO_RETRIEVAL_TIMEOUT);
         return constants;
     }
@@ -86,7 +77,7 @@ public class FirebasePhoneAuthModuleModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void verifyPhoneNumber(String phoneNumber, Promise promise) {
-        Log.i(TAG, "INSIDE verifyPhoneNumber");
+        Log.i(TAG, "verifyPhoneNumber");
         Log.i(TAG, "phoneNumber >> " + phoneNumber);
         firebaseAuth = FirebaseAuth.getInstance();
 
@@ -100,6 +91,7 @@ public class FirebasePhoneAuthModuleModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void resendVerificationCode(String phoneNumber, Promise promise){
+        Log.i(TAG, "resendVerificationCode");
         PhoneAuthProvider.getInstance().verifyPhoneNumber(
                 phoneNumber,
                 60,
@@ -109,40 +101,21 @@ public class FirebasePhoneAuthModuleModule extends ReactContextBaseJavaModule {
                 phoneAuthResendToken);
     }
 
+    @ReactMethod
+    public void verifyPhoneNumberWithCode(String code, final Promise promise) {
+        Log.i(TAG, "verifyPhoneNumberWithCode");
+        PhoneAuthCredential credential = PhoneAuthProvider.getCredential(firebaseVerificationId, code);
+        Log.i(TAG, "signInWithCode");
+        signIn(credential, promise);
+    }
+
     private  PhoneAuthProvider.OnVerificationStateChangedCallbacks verificationCallback(final Promise promise) {
         phoneAuthProviderCallbacks =  new PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
             @Override
             public void onVerificationCompleted(PhoneAuthCredential credential) {
                 Log.i(TAG, "onVerificationCompleted");
-                firebaseAuth.signInWithCredential(credential)
-                        .addOnCompleteListener(new OnCompleteListener<AuthResult>() {
-                            @Override
-                            public void onComplete(@NonNull Task<AuthResult> task) {
-                                if (task.isSuccessful()) {
-                                    Log.i(TAG, "signInWithCredential:success");
-                                    FirebaseUser user = task.getResult().getUser();
-                                    Log.i(TAG, "Phone Number >> "+ user.getPhoneNumber());
-                                    Log.i(TAG, "UID >> "+ user.getUid());
-                                    Log.i(TAG, "ProviderId >> "+ user.getProviderId());
-                                    JSONObject object = new JSONObject();
-                                    try {
-                                        object.put("phoneNumber", user.getPhoneNumber());
-                                        object.put("providerId", user.getProviderId());
-                                        object.put("uid", user.getUid());
-                                        promise.resolve(object.toString());
-                                    } catch (JSONException e) {
-                                        e.printStackTrace();
-                                    }
-                                } else {
-                                    Log.w(TAG, "signInWithCredential:failure", task.getException());
-                                    if (task.getException() instanceof FirebaseAuthInvalidCredentialsException) {
-                                        Log.w(TAG, "Invalid code.");
-                                        promise.resolve("Invalid code.");
-                                    }
-                                    promise.reject("signInWithCredential:failure \n", task.getException());
-                                }
-                            }
-                        });
+                Log.i(TAG, "signInWithPhoneAuth");
+                signIn(credential, promise);
                 sendEvent(ON_VERIFICATION_COMPLETED, credential.getSmsCode());
             }
 
@@ -150,11 +123,11 @@ public class FirebasePhoneAuthModuleModule extends ReactContextBaseJavaModule {
             public void onVerificationFailed(FirebaseException e) {
                 Log.e(TAG, "onVerificationFailed" + e.getMessage());
                 if (e instanceof FirebaseAuthInvalidCredentialsException) {
-                    promise.reject("firebase_auth_phone_verification_failed", "Invalid phone number.");
+                    promise.reject("101", "firebase_auth_phone_verification_failed : Invalid phone number.");
                 } else if (e instanceof FirebaseTooManyRequestsException) {
-                    promise.reject("firebase_auth_phone_verification_failed", "Quota exceeded.");
+                    promise.reject("102", "firebase_auth_phone_verification_failed : Quota exceeded.");
                 } else {
-                    promise.reject("firebase_auth_phone_verification_failed", e.getMessage());
+                    promise.reject("103", e.getMessage());
                 }
 
             }
@@ -179,11 +152,7 @@ public class FirebasePhoneAuthModuleModule extends ReactContextBaseJavaModule {
         return phoneAuthProviderCallbacks;
     }
 
-    @ReactMethod
-    public void verifyPhoneNumberWithCode(String code, final Promise promise) {
-        Log.i(TAG, "verifyPhoneNumberWithCode:  verificationId >> "+ firebaseVerificationId+ " > CODE >> "+ code);
-        PhoneAuthCredential credential = PhoneAuthProvider.getCredential(firebaseVerificationId, code);
-        Log.i(TAG, "signInWithPhoneAuthCredential: credential >> "+credential);
+    private void signIn(PhoneAuthCredential credential, final Promise promise){
         firebaseAuth.signInWithCredential(credential)
                 .addOnCompleteListener(new OnCompleteListener<AuthResult>() {
                     @Override
@@ -191,9 +160,6 @@ public class FirebasePhoneAuthModuleModule extends ReactContextBaseJavaModule {
                         if (task.isSuccessful()) {
                             Log.i(TAG, "signInWithCredential:success");
                             FirebaseUser user = task.getResult().getUser();
-                            Log.i(TAG, "Phone Number >> "+ user.getPhoneNumber());
-                            Log.i(TAG, "UID >> "+ user.getUid());
-                            Log.i(TAG, "ProviderId >> "+ user.getProviderId());
                             JSONObject object = new JSONObject();
                             try {
                                 object.put("phoneNumber", user.getPhoneNumber());
@@ -207,14 +173,13 @@ public class FirebasePhoneAuthModuleModule extends ReactContextBaseJavaModule {
                             Log.w(TAG, "signInWithCredential:failure", task.getException());
                             if (task.getException() instanceof FirebaseAuthInvalidCredentialsException) {
                                 Log.w(TAG, "Invalid code.");
-                                promise.resolve("Invalid code.");
+                                promise.reject("201", "FirebaseAuthInvalidCredentialsException : Invalid code");
                             }
-                            promise.reject("signInWithCredential:failure \n", task.getException());
+                            promise.reject("202", "signInWithCredential:failure "+task.getException());
                         }
                     }
                 });
     }
-
 
     @ReactMethod
     public void signOut(final Promise promise) {
